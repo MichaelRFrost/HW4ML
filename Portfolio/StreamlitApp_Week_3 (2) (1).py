@@ -10,12 +10,8 @@ import tarfile
 import tempfile
 
 import boto3
-import sagemaker
-from sagemaker.predictor import Predictor
-from sagemaker.serializers import CSVSerializer
-from sagemaker.deserializers import JSONDeserializer
-from sagemaker.serializers import NumpySerializer
-from sagemaker.deserializers import NumpyDeserializer
+
+import json
 
 from sklearn.pipeline import Pipeline
 import shap
@@ -50,7 +46,6 @@ def get_session(aws_id, aws_secret, aws_token):
     )
 
 session = get_session(aws_id, aws_secret, aws_token)
-sm_session = sagemaker.Session(boto_session=session)
 
 # Data & Model Configuration
 df_features = extract_features()
@@ -92,18 +87,39 @@ def load_shap_explainer(_session, bucket, key, local_path):
 
 # Prediction Logic
 def call_model_api(input_df):
-
-    predictor = Predictor(
-        endpoint_name=MODEL_INFO["endpoint"],
-        sagemaker_session=sm_session,
-        serializer=NumpySerializer(),
-        deserializer=NumpyDeserializer() 
-    )
+    runtime_client = session.client("sagemaker-runtime")
 
     try:
-        raw_pred = predictor.predict(input_df)
-        pred_val = pd.DataFrame(raw_pred).values[-1][0]
-        return round(float(pred_val), 4), 200
+        payload = input_df.to_numpy().tolist()
+
+        response = runtime_client.invoke_endpoint(
+            EndpointName=MODEL_INFO["endpoint"],
+            ContentType="application/json",
+            Body=json.dumps(payload)
+        )
+
+        raw_pred = response["Body"].read().decode("utf-8")
+
+        # First try JSON parsing
+        try:
+            parsed = json.loads(raw_pred)
+
+            if isinstance(parsed, list):
+                if len(parsed) > 0 and isinstance(parsed[-1], list):
+                    pred_val = parsed[-1][0]
+                else:
+                    pred_val = parsed[-1]
+            else:
+                pred_val = parsed
+        except Exception:
+            # Fallback for plain text / bracketed numeric output
+            cleaned = raw_pred.strip().replace("[", "").replace("]", "")
+            pred_val = cleaned.split(",")[-1].strip()
+
+        pred_val = int(float(pred_val))
+        mapping = {-1: "SELL", 0: "HOLD", 1: "BUY"}
+        return mapping.get(pred_val, pred_val), 200
+
     except Exception as e:
         return f"Error: {str(e)}", 500
 
