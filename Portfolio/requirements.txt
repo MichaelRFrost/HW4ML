@@ -7,5 +7,6 @@ imbalanced-learn
 shap==0.44.1
 joblib
 boto3
-sagemaker==2.214.3
 requests
+yfinance
+pandas-datareader
