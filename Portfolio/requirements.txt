@@ -4,8 +4,8 @@ pandas
 matplotlib
 scikit-learn
 imbalanced-learn
-shap
+shap==0.44.1
 joblib
 boto3
-sagemaker
+sagemaker==2.214.3
 requests
