@@ -95,32 +95,38 @@ def convert_input_pca_regression(request_body, request_content_type):
 
     dataset = pd.read_csv(file_path,index_col=0)
 
-    target = 'MSFT'
+   target = 'IBM'
 
-    option = 2
+option = 2
 
-    if option == 2:
+if option == 2:
 
-        X = FeatureEngineer(windows=[10,15]).transform(dataset[[target]])
-    
-        techIndicator_1 = 'RSI_15'
-        RSI_15 = json.loads(request_body)[techIndicator_1]
-        techIndicator_2 = 'MOM_15'
-        MOM_15 = json.loads(request_body)[techIndicator_2]
+    price = dataset[target].copy()
 
-        # Calculate the distance
-        distances = np.sqrt(
-            (X[techIndicator_1] - RSI_15)**2 + 
-            (X[techIndicator_2] - MOM_15)**2
-        )
-        
-        closest_index = distances.idxmin()
-        closest_row = X.loc[[closest_index]]
-    
-        closest_row[techIndicator_1] = RSI_15
-        closest_row[techIndicator_2] = MOM_15
-    
-        return closest_row
+    X = pd.DataFrame(index=dataset.index)
+    X['ret_5'] = price.pct_change(5)
+    X['mom_5'] = price - price.shift(5)
+    X = X.dropna()
+
+    techIndicator_1 = 'mom_5'
+    mom_5 = json.loads(request_body)[techIndicator_1]
+
+    techIndicator_2 = 'ret_5'
+    ret_5 = json.loads(request_body)[techIndicator_2]
+
+    # Calculate the distance
+    distances = np.sqrt(
+        (X[techIndicator_1] - mom_5)**2 +
+        (X[techIndicator_2] - ret_5)**2
+    )
+
+    closest_index = distances.idxmin()
+    closest_row = X.loc[[closest_index]]
+
+    closest_row[techIndicator_1] = mom_5
+    closest_row[techIndicator_2] = ret_5
+
+    return closest_row
     else:
 
         return_period = 5
