@@ -95,35 +95,91 @@ def convert_input_pca_regression(request_body, request_content_type):
 
     dataset = pd.read_csv(file_path,index_col=0)
     target = 'IBM'
-    option = 2
+
     
-    if option == 2:
+    option = 1
     
+    if option == 1:
+
+        
         price = dataset[target].copy()
-    
+        
         X = pd.DataFrame(index=dataset.index)
+        
+        # Returns
+        X['ret_1'] = price.pct_change(1)
+        X['ret_2'] = price.pct_change(2)
+        X['ret_3'] = price.pct_change(3)
         X['ret_5'] = price.pct_change(5)
+        X['ret_10'] = price.pct_change(10)
+        
+        # Lagged returns
+        X['ret_1_lag1'] = X['ret_1'].shift(1)
+        X['ret_1_lag2'] = X['ret_1'].shift(2)
+        X['ret_1_lag3'] = X['ret_1'].shift(3)
+        
+        # Moving averages
+        X['sma_5'] = price.rolling(5).mean()
+        X['sma_10'] = price.rolling(10).mean()
+        X['sma_20'] = price.rolling(20).mean()
+        
+        # Ratios
+        X['price_sma5_ratio'] = price / X['sma_5']
+        X['price_sma10_ratio'] = price / X['sma_10']
+        X['price_sma20_ratio'] = price / X['sma_20']
+        
+        # Volatility
+        X['vol_5'] = X['ret_1'].rolling(5).std()
+        X['vol_10'] = X['ret_1'].rolling(10).std()
+        X['vol_20'] = X['ret_1'].rolling(20).std()
+        
+        # Rolling highs/lows
+        X['roll_max_5'] = price.rolling(5).max()
+        X['roll_min_5'] = price.rolling(5).min()
+        
+        # Distance from extremes
+        X['dist_max_5'] = price / X['roll_max_5'] - 1
+        X['dist_min_5'] = price / X['roll_min_5'] - 1
+        
+        # Momentum
         X['mom_5'] = price - price.shift(5)
-        X = X.dropna()
+        X['mom_10'] = price - price.shift(10)
+        
+        # EMA
+        X['ema_5'] = price.ewm(span=5, adjust=False).mean()
+        X['ema_10'] = price.ewm(span=10, adjust=False).mean()
+        X['ema_ratio'] = X['ema_5'] / X['ema_10']
+        
+        # RSI-style
+        delta = price.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
+        
+        rs = avg_gain / avg_loss
+        X['rsi_14'] = 100 - (100 / (1 + rs))
+        
+        
+        technicalindicator_1 = 'mom_5'
+        mom_5 = json.loads(request_body)[technicalindicator_1]
     
-        techIndicator_1 = 'mom_5'
-        mom_5 = json.loads(request_body)[techIndicator_1]
-    
-        techIndicator_2 = 'ret_5'
-        ret_5 = json.loads(request_body)[techIndicator_2]
-    
+        technicalindicator_2 = 'ret_5'
+        ret_5 = json.loads(request_body)[technicalindicator_2]
+            
         # Calculate the distance
         distances = np.sqrt(
-            (X[techIndicator_1] - mom_5)**2 +
-            (X[techIndicator_2] - ret_5)**2
+        (X[technicalindicator_1] - mom_5)**2 +
+        (X[technicalindicator_2] - ret_5)**2
         )
-    
+            
+            
         closest_index = distances.idxmin()
         closest_row = X.loc[[closest_index]]
-    
-        closest_row[techIndicator_1] = mom_5
-        closest_row[techIndicator_2] = ret_5
-    
+        closest_row[technicalindicator_1] = mom_5
+        closest_row[technicalindicator_2] = ret_5
+        
         return closest_row
     else:
     
